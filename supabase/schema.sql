@@ -109,6 +109,32 @@ AFTER INSERT ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
 
+CREATE OR REPLACE FUNCTION public.prevent_non_admin_role_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF OLD.role IS DISTINCT FROM NEW.role
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.profiles admin_profile
+       WHERE admin_profile.id = auth.uid()
+         AND admin_profile.role = 'admin'
+     ) THEN
+    RAISE EXCEPTION 'Only an admin can change profile roles';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS protect_profile_role ON public.profiles;
+CREATE TRIGGER protect_profile_role
+BEFORE UPDATE ON public.profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_non_admin_role_change();
+
 -- =====================================================
 -- RLS Policies
 -- =====================================================
@@ -245,24 +271,14 @@ CREATE POLICY "messages_insert_allowed"
 ON messages FOR INSERT
 WITH CHECK (
   auth.uid() = sender_id
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM friendships f
-      WHERE (
-        (f.requester_id = sender_id AND f.addressee_id = receiver_id)
-        OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
-      )
-      AND f.status = 'accepted'
+  AND EXISTS (
+    SELECT 1
+    FROM friendships f
+    WHERE (
+      (f.requester_id = sender_id AND f.addressee_id = receiver_id)
+      OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
     )
-    OR EXISTS (
-      SELECT 1
-      FROM friendships f
-      WHERE (
-        (f.requester_id = sender_id AND f.addressee_id = receiver_id)
-        OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
-      )
-    )
+    AND f.status = 'accepted'
   )
 );
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Bell,
   CalendarDays,
@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { CommunityDashboard } from './components/CommunityDashboard'
 import './App.css'
 
 function App() {
@@ -26,29 +27,44 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
     if (!supabase) return
 
-    const loadSession = async () => {
-      const { data } = await supabase.auth.getSession()
-      setSession(data.session)
-      setView(data.session ? 'dashboard' : 'auth')
+    const syncSession = async (currentSession) => {
+      setSession(currentSession)
+      if (!currentSession) {
+        setProfile(null)
+        setProfileLoading(false)
+        setView('auth')
+        return
+      }
+
+      setProfileLoading(true)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentSession.user.id)
+        .maybeSingle()
+
+      setProfile(profileData)
+      setName(profileData?.full_name && profileData.full_name !== 'Nuevo usuario' ? profileData.full_name : '')
+      setCareer(profileData?.career && profileData.career !== 'Sin carrera' ? profileData.career : '')
+      setSemester(String(profileData?.semester || 1))
+      setProfileLoading(false)
+      setView('dashboard')
     }
 
-    loadSession()
+    supabase.auth.getSession().then(({ data }) => syncSession(data.session))
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, currentSession) => {
-      setSession(currentSession)
-      setView(currentSession ? 'dashboard' : 'auth')
+      syncSession(currentSession)
     })
 
     return () => listener.subscription.unsubscribe()
   }, [])
-
-  const canUsePlatform = useMemo(() => {
-    return !!session?.user
-  }, [session])
 
   const handlePasswordLogin = async (event) => {
     event.preventDefault()
@@ -119,12 +135,18 @@ function App() {
       semester: Number(semester) || 1,
       bio: 'Nuevo miembro de la comunidad universitaria.',
       interests: ['General'],
-      role: 'user',
     })
 
     if (error) {
       setMessage(error.message)
     } else {
+      setProfile((currentProfile) => ({
+        ...currentProfile,
+        id: session.user.id,
+        full_name: name || session.user.email,
+        career: career || 'Sin carrera',
+        semester: Number(semester) || 1,
+      }))
       setMessage('Perfil actualizado correctamente.')
     }
 
@@ -290,13 +312,11 @@ function App() {
 
         {view === 'dashboard' && (
           <section className="space-y-6">
-            {!canUsePlatform && (
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
-                Tu dominio no está autorizado para ingresar a la plataforma.
-              </div>
-            )}
-
-            <div className="grid gap-6 lg:grid-cols-3">
+            {profileLoading ? (
+              <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 text-slate-300">Cargando tu perfil...</div>
+            ) : profile?.full_name && profile?.career && profile.full_name !== 'Nuevo usuario' && profile.career !== 'Sin carrera' ? (
+              <CommunityDashboard supabase={supabase} session={session} profile={profile} />
+            ) : <div className="grid gap-6 lg:grid-cols-3">
               <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 lg:col-span-2">
                 <div className="flex items-center gap-3">
                   <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-500/15 text-violet-300">
@@ -372,7 +392,7 @@ function App() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
           </section>
         )}
       </main>
