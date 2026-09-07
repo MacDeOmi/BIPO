@@ -124,6 +124,32 @@ CREATE POLICY message_requests_update_receiver ON public.message_requests FOR UP
 USING (auth.uid() = receiver_id)
 WITH CHECK (auth.uid() = receiver_id AND status IN ('accepted', 'rejected'));
 
+DROP POLICY IF EXISTS messages_insert_allowed ON public.messages;
+CREATE POLICY messages_insert_allowed
+ON public.messages FOR INSERT
+WITH CHECK (
+  auth.uid() = sender_id
+  AND (
+    EXISTS (
+      SELECT 1 FROM public.friendships f
+      WHERE (
+        (f.requester_id = sender_id AND f.addressee_id = receiver_id)
+        OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
+      )
+      AND f.status = 'accepted'
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.follows outgoing
+      JOIN public.follows incoming
+        ON incoming.follower_id = receiver_id
+       AND incoming.following_id = sender_id
+      WHERE outgoing.follower_id = sender_id
+        AND outgoing.following_id = receiver_id
+    )
+  )
+);
+
 DROP POLICY IF EXISTS dating_profiles_public_auth ON public.dating_profiles;
 CREATE POLICY dating_profiles_public_auth ON public.dating_profiles FOR SELECT
 USING (auth.role() = 'authenticated');

@@ -304,14 +304,25 @@ CREATE POLICY "messages_insert_allowed"
 ON messages FOR INSERT
 WITH CHECK (
   auth.uid() = sender_id
-  AND EXISTS (
-    SELECT 1
-    FROM friendships f
-    WHERE (
-      (f.requester_id = sender_id AND f.addressee_id = receiver_id)
-      OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM friendships f
+      WHERE (
+        (f.requester_id = sender_id AND f.addressee_id = receiver_id)
+        OR (f.addressee_id = sender_id AND f.requester_id = receiver_id)
+      )
+      AND f.status = 'accepted'
     )
-    AND f.status = 'accepted'
+    OR EXISTS (
+      SELECT 1
+      FROM follows outgoing
+      JOIN follows incoming
+        ON incoming.follower_id = receiver_id
+       AND incoming.following_id = sender_id
+      WHERE outgoing.follower_id = sender_id
+        AND outgoing.following_id = receiver_id
+    )
   )
 );
 
