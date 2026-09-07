@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, UserRound } from 'lucide-react'
 
-export function SocialProfilePanel({ supabase, session, profiles }) {
-  const [selectedId, setSelectedId] = useState(session.user.id)
+export function SocialProfilePanel({ supabase, session, profiles, selectedProfileId, onSelectProfile }) {
+  const [selectedId, setSelectedId] = useState(selectedProfileId || session.user.id)
   const [profile, setProfile] = useState(null)
   const [threads, setThreads] = useState([])
   const [plans, setPlans] = useState([])
   const [followers, setFollowers] = useState(0)
   const [following, setFollowing] = useState(0)
   const [isFollowing, setIsFollowing] = useState(false)
+
+  useEffect(() => {
+    setSelectedId(selectedProfileId || session.user.id)
+  }, [selectedProfileId, session.user.id])
 
   useEffect(() => {
     const load = async () => {
@@ -38,5 +42,29 @@ export function SocialProfilePanel({ supabase, session, profiles }) {
     setFollowers((value) => value + (isFollowing ? -1 : 1))
   }
 
-  return <div className="space-y-5"><div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-slate-950/60 p-5"><div className="grid h-16 w-16 place-items-center rounded-full bg-violet-500/20 text-violet-300"><UserRound /></div><div className="flex-1"><h3 className="text-2xl font-bold">{profile?.full_name || 'Perfil'}</h3><p className="text-sm text-slate-400">{profile?.career} · semestre {profile?.semester}</p><div className="mt-2 flex gap-4 text-sm"><span><strong>{followers}</strong> seguidores</span><span><strong>{following}</strong> seguidos</span></div></div>{selectedId !== session.user.id && <button onClick={toggleFollow} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-4 py-2"><UserPlus className="h-4 w-4" />{isFollowing ? 'Dejar de seguir' : 'Seguir'}</button>}</div><select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-white"><option value={session.user.id}>Mi perfil</option>{profiles.filter((item) => item.id !== session.user.id).map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><div className="grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><h4 className="mb-3 font-semibold">Hilos</h4>{threads.map((thread) => <p key={thread.id} className="border-b border-white/10 py-2 text-sm text-slate-300">{thread.content}</p>)}</div><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><h4 className="mb-3 font-semibold">Planes casuales</h4>{plans.map((plan) => <div key={plan.id} className="border-b border-white/10 py-2 text-sm"><p>{plan.title}</p><p className="text-slate-400">{plan.description}</p></div>)}</div></div></div>
+  const openProfile = (id) => {
+    setSelectedId(id)
+    onSelectProfile?.(id)
+  }
+
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFollowing, setShowFollowing] = useState(false)
+  const [followerUsers, setFollowerUsers] = useState([])
+  const [followingUsers, setFollowingUsers] = useState([])
+
+  const loadConnections = async (type) => {
+    const column = type === 'followers' ? 'following_id' : 'follower_id'
+    const { data } = await supabase.from('follows').select('follower_id, following_id').eq(column, selectedId)
+    const ids = (data || []).map((row) => type === 'followers' ? row.follower_id : row.following_id)
+    const users = profiles.filter((item) => ids.includes(item.id))
+    if (type === 'followers') {
+      setFollowerUsers(users)
+      setShowFollowers(true)
+    } else {
+      setFollowingUsers(users)
+      setShowFollowing(true)
+    }
+  }
+
+  return <div className="space-y-5"><div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-slate-950/60 p-5"><div className="grid h-16 w-16 place-items-center rounded-full bg-violet-500/20 text-violet-300"><UserRound /></div><div className="flex-1"><h3 className="text-2xl font-bold">{profile?.full_name || 'Perfil'}</h3><p className="text-sm text-slate-400">{profile?.career} · semestre {profile?.semester}</p><div className="mt-2 flex gap-4 text-sm"><button onClick={() => loadConnections('followers')} className="hover:text-violet-300"><strong>{followers}</strong> seguidores</button><button onClick={() => loadConnections('following')} className="hover:text-violet-300"><strong>{following}</strong> seguidos</button></div></div>{selectedId !== session.user.id && <button onClick={toggleFollow} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-4 py-2"><UserPlus className="h-4 w-4" />{isFollowing ? 'Dejar de seguir' : 'Seguir'}</button>}</div><select value={selectedId} onChange={(event) => openProfile(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-white"><option value={session.user.id}>Mi perfil</option>{profiles.filter((item) => item.id !== session.user.id).map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>{(showFollowers || showFollowing) && <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="mb-3 flex justify-between"><h4 className="font-semibold">{showFollowers ? 'Seguidores' : 'Seguidos'}</h4><button onClick={() => { setShowFollowers(false); setShowFollowing(false) }} className="text-xs text-slate-400">Cerrar</button></div>{(showFollowers ? followerUsers : followingUsers).map((user) => <button key={user.id} onClick={() => openProfile(user.id)} className="block w-full border-b border-white/10 py-2 text-left text-sm text-violet-300 hover:underline">{user.full_name}</button>)}</div>}<div className="grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><h4 className="mb-3 font-semibold">Hilos</h4>{threads.map((thread) => <p key={thread.id} className="border-b border-white/10 py-2 text-sm text-slate-300">{thread.content}</p>)}</div><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><h4 className="mb-3 font-semibold">Planes casuales</h4>{plans.map((plan) => <div key={plan.id} className="border-b border-white/10 py-2 text-sm"><p>{plan.title}</p><p className="text-slate-400">{plan.description}</p></div>)}</div></div></div>
 }
