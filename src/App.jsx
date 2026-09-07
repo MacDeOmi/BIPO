@@ -88,7 +88,7 @@ function App() {
     setLoading(false)
   }
 
-  const handleRegisterOtp = async (event) => {
+  const handleRegister = async (event) => {
     event.preventDefault()
     setLoading(true)
     setMessage('')
@@ -105,18 +105,17 @@ function App() {
       return
     }
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-      },
-    })
+    localStorage.setItem('bipo_remember', 'true')
+    const { data, error } = await supabase.auth.signUp({ email, password })
 
     if (error) {
       setMessage(error.message)
+    } else if (data.session) {
+      setSession(data.session)
+      setView('dashboard')
+      setMessage('Cuenta creada correctamente.')
     } else {
-      setMessage('Código enviado. Revisa tu correo para confirmar tu registro.')
-      setView('otp')
+      setMessage('Cuenta creada. Revisa tu correo y confirma tu cuenta antes de iniciar sesión.')
     }
 
     setLoading(false)
@@ -318,7 +317,7 @@ function App() {
                 </button>
               </div>
 
-              <form onSubmit={authMode === 'register' ? handleRegisterOtp : handlePasswordLogin} className="space-y-4">
+              <form onSubmit={authMode === 'register' ? handleRegister : handlePasswordLogin} className="space-y-4">
                 <label className="block text-sm text-slate-300">
                   Correo institucional
                   <input
@@ -331,20 +330,21 @@ function App() {
                   />
                 </label>
 
+                <label className="block text-sm text-slate-300">
+                  Contraseña
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Tu contraseña"
+                    minLength={6}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                    required
+                  />
+                </label>
+
                 {authMode === 'login' && (
                   <>
-                    <label className="block text-sm text-slate-300">
-                      Contraseña
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Tu contraseña"
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-violet-400"
-                        required
-                      />
-                    </label>
-
                     <label className="flex items-center gap-2 text-sm text-slate-300">
                       <input
                         type="checkbox"
@@ -362,7 +362,7 @@ function App() {
                   disabled={loading}
                   className="w-full rounded-xl bg-violet-500 px-4 py-3 font-medium text-white transition hover:bg-violet-400 disabled:opacity-60"
                 >
-                  {loading ? 'Procesando...' : authMode === 'register' ? 'Crear cuenta con OTP' : 'Iniciar sesión'}
+                  {loading ? 'Procesando...' : authMode === 'register' ? 'Crear cuenta' : 'Iniciar sesión'}
                 </button>
               </form>
 
