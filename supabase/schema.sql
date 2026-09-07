@@ -125,6 +125,16 @@ BEGIN
     RAISE EXCEPTION 'Only an admin can change profile roles';
   END IF;
 
+  IF OLD.is_banned IS DISTINCT FROM NEW.is_banned
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.profiles moderator_profile
+       WHERE moderator_profile.id = auth.uid()
+         AND moderator_profile.role IN ('moderator', 'admin')
+     ) THEN
+    RAISE EXCEPTION 'Only a moderator or admin can change ban status';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -134,6 +144,26 @@ CREATE TRIGGER protect_profile_role
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.prevent_non_admin_role_change();
+
+CREATE OR REPLACE FUNCTION public.prevent_friendship_endpoint_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD.requester_id IS DISTINCT FROM NEW.requester_id
+     OR OLD.addressee_id IS DISTINCT FROM NEW.addressee_id THEN
+    RAISE EXCEPTION 'Friendship participants cannot be changed';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS protect_friendship_endpoints ON public.friendships;
+CREATE TRIGGER protect_friendship_endpoints
+BEFORE UPDATE ON public.friendships
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_friendship_endpoint_change();
 
 -- =====================================================
 -- RLS Policies
@@ -173,15 +203,16 @@ WITH CHECK (
   OR addressee_id = auth.uid()
 );
 
-CREATE POLICY "friendships_update_own"
+CREATE POLICY "friendships_update_received"
 ON friendships FOR UPDATE
 USING (
-  requester_id = auth.uid()
-  OR addressee_id = auth.uid()
+  addressee_id = auth.uid()
 )
 WITH CHECK (
-  requester_id = auth.uid()
-  OR addressee_id = auth.uid()
+  addressee_id = auth.uid()
+  AND status IN ('accepted', 'rejected')
+  AND requester_id = friendships.requester_id
+  AND addressee_id = friendships.addressee_id
 );
 
 CREATE POLICY "threads_select_auth_users"

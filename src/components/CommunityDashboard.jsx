@@ -82,6 +82,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   }, [supabase, session, reload])
 
   const profileName = (id) => profiles.find((item) => item.id === id)?.full_name || 'Usuario'
+  const canModerate = profile?.role === 'admin' || profile?.role === 'moderator'
   const acceptedFriends = friends.filter((friend) => friend.status === 'accepted' && (friend.requester_id === session.user.id || friend.addressee_id === session.user.id))
   const friendIds = acceptedFriends.map((friend) => friend.requester_id === session.user.id ? friend.addressee_id : friend.requester_id)
 
@@ -129,12 +130,14 @@ export function CommunityDashboard({ supabase, session, profile }) {
   }
 
   const moderateProfile = async (userId, isBanned) => {
+    if (!canModerate) return
     const { error: updateError } = await supabase.from('profiles').update({ is_banned: isBanned }).eq('id', userId)
     if (updateError) setError(updateError.message)
     setReload((value) => value + 1)
   }
 
   const deleteContent = async (table, id) => {
+    if (table === 'casual_plans' && !canModerate) return
     const { error: deleteError } = await supabase.from(table).delete().eq('id', id)
     if (deleteError) setError(deleteError.message)
     setReload((value) => value + 1)
@@ -150,7 +153,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
         <article key={thread.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
           <div className="flex items-center justify-between text-sm"><strong>{profileName(thread.user_id)}</strong><span className="text-slate-500">{new Date(thread.created_at).toLocaleString()}</span></div>
           <p className="mt-3 text-slate-200">{thread.content}</p>
-          <div className="mt-3 flex justify-between text-xs text-slate-500"><span>{thread.likes_count || 0} reacciones</span>{(thread.user_id === session.user.id || ['admin', 'moderator'].includes(profile?.role)) && <button onClick={() => deleteContent('threads', thread.id)} className="text-rose-300">Eliminar</button>}</div>
+          <div className="mt-3 flex justify-between text-xs text-slate-500"><span>{thread.likes_count || 0} reacciones</span>{(thread.user_id === session.user.id || canModerate) && <button onClick={() => deleteContent('threads', thread.id)} className="text-rose-300">Eliminar</button>}</div>
         </article>
       ))}
       {!threads.length && <p className="text-sm text-slate-400">Todavía no hay hilos.</p>}
@@ -182,7 +185,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const renderPlans = () => (
     <div className="space-y-4">
       <form onSubmit={createPlan} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-2"><input required value={planForm.title} onChange={(event) => setPlanForm({ ...planForm, title: event.target.value })} placeholder="Título del plan" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><input required value={planForm.category} onChange={(event) => setPlanForm({ ...planForm, category: event.target.value })} placeholder="Categoría" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><textarea required value={planForm.description} onChange={(event) => setPlanForm({ ...planForm, description: event.target.value })} placeholder="Descripción" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white md:col-span-2" /><input required type="datetime-local" value={planForm.meet_time} onChange={(event) => setPlanForm({ ...planForm, meet_time: event.target.value })} className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><button className="rounded-xl bg-violet-500 px-4 py-3">Crear plan</button></form>
-      {plans.map((plan) => <div key={plan.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="flex justify-between"><strong>{plan.title}</strong><span className="text-sm text-slate-400">{new Date(plan.meet_time).toLocaleString()}</span></div><p className="mt-2 text-sm text-slate-300">{plan.description}</p><p className="mt-2 text-xs text-slate-500">{plan.category} · creado por {profileName(plan.creator_id)}</p>{['admin', 'moderator'].includes(profile?.role) && <button onClick={() => deleteContent('casual_plans', plan.id)} className="mt-3 text-xs text-rose-300">Eliminar</button>}</div>)}
+      {plans.map((plan) => <div key={plan.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="flex justify-between"><strong>{plan.title}</strong><span className="text-sm text-slate-400">{new Date(plan.meet_time).toLocaleString()}</span></div><p className="mt-2 text-sm text-slate-300">{plan.description}</p><p className="mt-2 text-xs text-slate-500">{plan.category} · creado por {profileName(plan.creator_id)}</p>{canModerate && <button onClick={() => deleteContent('casual_plans', plan.id)} className="mt-3 text-xs text-rose-300">Eliminar</button>}</div>)}
     </div>
   )
 
@@ -207,7 +210,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
     <section className="space-y-6">
       <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2">
         {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === id ? 'bg-violet-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><Icon className="h-4 w-4" />{label}</button>)}
-        {['admin', 'moderator'].includes(profile?.role) && <button onClick={() => setActiveTab('admin')} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === 'admin' ? 'bg-amber-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><ShieldCheck className="h-4 w-4" />Moderación</button>}
+        {canModerate && <button onClick={() => setActiveTab('admin')} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === 'admin' ? 'bg-amber-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><ShieldCheck className="h-4 w-4" />Moderación</button>}
       </div>
       {error && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
       <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6"><h2 className="mb-5 text-2xl font-semibold text-white">{tabs.find((tab) => tab.id === activeTab)?.label || 'Moderación'}</h2>{activeTab === 'admin' ? renderAdmin() : renderContent()}</div>
