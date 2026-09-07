@@ -271,7 +271,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2">
-        {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === id ? 'bg-violet-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><Icon className="h-4 w-4" />{label}</button>)}
+        {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setActiveTab(id)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === id ? 'bg-violet-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><Icon className="h-4 w-4" />{label}{id === 'messages' && messageRequests.filter((request) => request.receiver_id === session.user.id && request.status === 'pending').length > 0 && <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{messageRequests.filter((request) => request.receiver_id === session.user.id && request.status === 'pending').length}</span>}</button>)}
         {canModerate && <button onClick={() => setActiveTab('admin')} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm ${activeTab === 'admin' ? 'bg-amber-500 text-white' : 'text-slate-300 hover:bg-white/5'}`}><ShieldCheck className="h-4 w-4" />Moderación</button>}
       </div>
       {error && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
