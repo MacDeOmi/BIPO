@@ -10,6 +10,8 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
+import { DatingPanel } from './DatingPanel'
+import { SocialProfilePanel } from './SocialProfilePanel'
 
 const tabs = [
   { id: 'threads', label: 'Hilos', icon: MessageSquare },
@@ -17,6 +19,7 @@ const tabs = [
   { id: 'dating', label: 'Citas', icon: Heart },
   { id: 'plans', label: 'Planes', icon: CalendarDays },
   { id: 'messages', label: 'Mensajes', icon: MessageCircle },
+  { id: 'profile', label: 'Perfil', icon: UserPlus },
 ]
 
 export function CommunityDashboard({ supabase, session, profile }) {
@@ -27,6 +30,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const [datingProfiles, setDatingProfiles] = useState([])
   const [plans, setPlans] = useState([])
   const [messages, setMessages] = useState([])
+  const [follows, setFollows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
@@ -45,16 +49,17 @@ export function CommunityDashboard({ supabase, session, profile }) {
     let mounted = true
     const loadData = async () => {
       setLoading(true)
-      const [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, role, is_banned'),
+      const [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, career, semester, bio, avatar_url, role, is_banned'),
         supabase.from('threads').select('id, user_id, content, likes_count, created_at').order('created_at', { ascending: false }),
         supabase.from('friendships').select('id, requester_id, addressee_id, status').order('created_at', { ascending: false }),
         supabase.from('dating_profiles').select('id, user_id, looking_for, prompt_answers, is_active').eq('is_active', true),
         supabase.from('casual_plans').select('id, creator_id, title, description, category, meet_time, max_participants').order('meet_time', { ascending: true }),
         supabase.from('messages').select('id, sender_id, receiver_id, content, created_at').or(`sender_id.eq.${session.user.id},receiver_id.eq.${session.user.id}`).order('created_at', { ascending: true }),
+        supabase.from('follows').select('follower_id, following_id'),
       ])
 
-      const result = [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult].find((item) => item.error)
+      const result = [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult].find((item) => item.error)
       if (result?.error) {
         if (mounted) setError(result.error.message)
       } else if (mounted) {
@@ -64,6 +69,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
         setDatingProfiles(datingResult.data || [])
         setPlans(plansResult.data || [])
         setMessages(messagesResult.data || [])
+        setFollows(followsResult.data || [])
         setError('')
       }
       if (mounted) setLoading(false)
@@ -88,6 +94,8 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const canModerate = profile?.role === 'admin' || profile?.role === 'moderator'
   const acceptedFriends = friends.filter((friend) => friend.status === 'accepted' && (friend.requester_id === session.user.id || friend.addressee_id === session.user.id))
   const friendIds = acceptedFriends.map((friend) => friend.requester_id === session.user.id ? friend.addressee_id : friend.requester_id)
+  const followsMutually = (targetId) => follows.some((follow) => follow.follower_id === session.user.id && follow.following_id === targetId)
+    && follows.some((follow) => follow.follower_id === targetId && follow.following_id === session.user.id)
 
   const createThread = async (event) => {
     event.preventDefault()
@@ -117,9 +125,16 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const sendMessage = async (event) => {
     event.preventDefault()
     if (!selectedFriend || !messageText.trim()) return
-    const { error: insertError } = await supabase.from('messages').insert({ sender_id: session.user.id, receiver_id: selectedFriend, content: messageText.trim(), type: 'direct' })
+    const table = followsMutually(selectedFriend) ? 'messages' : 'message_requests'
+    const payload = table === 'messages'
+      ? { sender_id: session.user.id, receiver_id: selectedFriend, content: messageText.trim(), type: 'direct' }
+      : { sender_id: session.user.id, receiver_id: selectedFriend, content: messageText.trim(), status: 'pending' }
+    const { error: insertError } = await supabase.from(table).insert(payload)
     if (insertError) setError(insertError.message)
-    else setMessageText('')
+    else {
+      setMessageText('')
+      setError(table === 'messages' ? '' : 'Mensaje enviado a solicitudes.')
+    }
     setReload((value) => value + 1)
   }
 
@@ -227,8 +242,9 @@ export function CommunityDashboard({ supabase, session, profile }) {
     if (loading) return <p className="text-sm text-slate-400">Cargando módulos...</p>
     if (activeTab === 'threads') return renderThreads()
     if (activeTab === 'friends') return renderFriends()
-    if (activeTab === 'dating') return renderDating()
+    if (activeTab === 'dating') return <DatingPanel supabase={supabase} session={session} profiles={profiles} />
     if (activeTab === 'plans') return renderPlans()
+    if (activeTab === 'profile') return <SocialProfilePanel supabase={supabase} session={session} profiles={profiles} />
     return renderMessages()
   }
 
