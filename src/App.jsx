@@ -88,6 +88,26 @@ function App() {
     setLoading(false)
   }
 
+  const handleMicrosoftLogin = async () => {
+    setMessage('')
+
+    if (!supabase) {
+      setMessage('Falta configurar Supabase en el entorno.')
+      return
+    }
+
+    localStorage.setItem('bipo_remember', 'true')
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        redirectTo: window.location.origin,
+        scopes: 'email',
+      },
+    })
+
+    if (error) setMessage(error.message)
+  }
+
   const handleRegister = async (event) => {
     event.preventDefault()
     setLoading(true)
@@ -365,6 +385,26 @@ function App() {
                   {loading ? 'Procesando...' : authMode === 'register' ? 'Crear cuenta' : 'Iniciar sesión'}
                 </button>
               </form>
+
+              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+                <span className="h-px flex-1 bg-white/10" />
+                o continúa con
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleMicrosoftLogin}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white px-4 py-3 font-medium text-slate-900 transition hover:bg-slate-100"
+              >
+                <span className="grid h-5 w-5 grid-cols-2 gap-0.5" aria-hidden="true">
+                  <span className="bg-red-500" />
+                  <span className="bg-green-500" />
+                  <span className="bg-blue-500" />
+                  <span className="bg-yellow-500" />
+                </span>
+                Continuar con Microsoft
+              </button>
 
               {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
             </div>
