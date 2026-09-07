@@ -30,6 +30,24 @@ $$;
 REVOKE ALL ON FUNCTION public.accept_message_request(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.accept_message_request(UUID) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.mark_messages_read(conversation_user_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.messages
+  SET is_read = TRUE
+  WHERE receiver_id = auth.uid()
+    AND sender_id = conversation_user_id
+    AND is_read = FALSE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.mark_messages_read(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mark_messages_read(UUID) TO authenticated;
+
 DROP POLICY IF EXISTS messages_insert_allowed ON public.messages;
 CREATE POLICY messages_insert_allowed
 ON public.messages FOR INSERT
