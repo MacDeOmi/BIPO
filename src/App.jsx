@@ -18,6 +18,7 @@ const EMAIL_REGEX = /^[^\s@]+@anahuac\.mx$/i
 
 function App() {
   const [view, setView] = useState('auth')
+  const [authMode, setAuthMode] = useState('login')
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [name, setName] = useState('')
@@ -71,14 +72,16 @@ function App() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: authMode === 'register',
       },
     })
 
     if (error) {
       setMessage(error.message)
     } else {
-      setMessage('Código enviado. Revisa tu correo institucional.')
+      setMessage(authMode === 'register'
+        ? 'Código enviado. Revisa tu correo para confirmar tu registro.'
+        : 'Código enviado. Revisa tu correo institucional.')
       setView('otp')
     }
 
@@ -218,7 +221,32 @@ function App() {
             <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl shadow-violet-950/30">
               <div className="mb-5 flex items-center gap-2 text-violet-300">
                 <LogIn className="h-5 w-5" />
-                <h2 className="text-2xl font-semibold">Inicia sesión</h2>
+                <h2 className="text-2xl font-semibold">
+                  {authMode === 'register' ? 'Crea tu cuenta' : 'Inicia sesión'}
+                </h2>
+              </div>
+
+              <div className="mb-5 grid grid-cols-2 rounded-xl bg-slate-950 p-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login')
+                    setMessage('')
+                  }}
+                  className={`rounded-lg px-3 py-2 transition ${authMode === 'login' ? 'bg-violet-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Iniciar sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('register')
+                    setMessage('')
+                  }}
+                  className={`rounded-lg px-3 py-2 transition ${authMode === 'register' ? 'bg-violet-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Registrarse
+                </button>
               </div>
 
               <form onSubmit={handleSendOtp} className="space-y-4">
@@ -239,7 +267,7 @@ function App() {
                   disabled={loading}
                   className="w-full rounded-xl bg-violet-500 px-4 py-3 font-medium text-white transition hover:bg-violet-400 disabled:opacity-60"
                 >
-                  {loading ? 'Enviando...' : 'Enviar código OTP'}
+                  {loading ? 'Enviando...' : authMode === 'register' ? 'Crear cuenta con OTP' : 'Enviar código OTP'}
                 </button>
               </form>
 
