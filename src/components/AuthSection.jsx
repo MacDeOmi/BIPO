@@ -1,6 +1,6 @@
 import { Lock, LogIn } from 'lucide-react'
 
-const EMAIL_REGEX = /^[^\s@]+@anahuac\.mx$/i
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
 
 export function AuthSection({ email, setEmail, onSubmit, loading, message, mode = 'request' }) {
   const submitLabel = mode === 'request' ? 'Enviar código OTP' : 'Confirmar acceso'
@@ -20,7 +20,7 @@ export function AuthSection({ email, setEmail, onSubmit, loading, message, mode 
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="nombre@anahuac.mx"
+              placeholder="correo@ejemplo.com"
               className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-violet-400"
               required
             />
