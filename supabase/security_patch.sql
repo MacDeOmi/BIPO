@@ -84,6 +84,32 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS threads_delete_moderator ON public.threads;
+DROP POLICY IF EXISTS threads_delete_owner_or_moderator ON public.threads;
+CREATE POLICY threads_delete_owner_or_moderator
+ON public.threads FOR DELETE
+USING (
+  auth.uid() = user_id
+  OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role IN ('moderator', 'admin')
+  )
+);
+
+DROP POLICY IF EXISTS casual_plans_delete_moderator ON public.casual_plans;
+DROP POLICY IF EXISTS casual_plans_delete_owner_or_moderator ON public.casual_plans;
+CREATE POLICY casual_plans_delete_owner_or_moderator
+ON public.casual_plans FOR DELETE
+USING (
+  auth.uid() = creator_id
+  OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role IN ('moderator', 'admin')
+  )
+);
+
 INSERT INTO public.profiles (id, full_name, career, semester, role)
 SELECT id, split_part(email, '@', 1), 'Sin carrera', 1, 'admin'::user_role
 FROM auth.users

@@ -5,6 +5,7 @@ import {
   MessageCircle,
   MessageSquare,
   Plus,
+  Pencil,
   ShieldCheck,
   UserPlus,
   Users,
@@ -35,6 +36,8 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const [friendTarget, setFriendTarget] = useState('')
   const [selectedFriend, setSelectedFriend] = useState('')
   const [messageText, setMessageText] = useState('')
+  const [editingThread, setEditingThread] = useState(null)
+  const [editingPlan, setEditingPlan] = useState(null)
 
   useEffect(() => {
     if (!supabase || !session?.user) return undefined
@@ -143,6 +146,28 @@ export function CommunityDashboard({ supabase, session, profile }) {
     setReload((value) => value + 1)
   }
 
+  const updateThread = async (event) => {
+    event.preventDefault()
+    if (!editingThread?.content.trim()) return
+    const { error: updateError } = await supabase.from('threads').update({ content: editingThread.content.trim() }).eq('id', editingThread.id).eq('user_id', session.user.id)
+    if (updateError) setError(updateError.message)
+    else setEditingThread(null)
+    setReload((value) => value + 1)
+  }
+
+  const updatePlan = async (event) => {
+    event.preventDefault()
+    const { error: updateError } = await supabase.from('casual_plans').update({
+      title: editingPlan.title,
+      description: editingPlan.description,
+      category: editingPlan.category,
+      meet_time: editingPlan.meet_time,
+    }).eq('id', editingPlan.id).eq('creator_id', session.user.id)
+    if (updateError) setError(updateError.message)
+    else setEditingPlan(null)
+    setReload((value) => value + 1)
+  }
+
   const renderThreads = () => (
     <div className="space-y-4">
       <form onSubmit={createThread} className="flex gap-3">
@@ -153,7 +178,8 @@ export function CommunityDashboard({ supabase, session, profile }) {
         <article key={thread.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
           <div className="flex items-center justify-between text-sm"><strong>{profileName(thread.user_id)}</strong><span className="text-slate-500">{new Date(thread.created_at).toLocaleString()}</span></div>
           <p className="mt-3 text-slate-200">{thread.content}</p>
-          <div className="mt-3 flex justify-between text-xs text-slate-500"><span>{thread.likes_count || 0} reacciones</span>{(thread.user_id === session.user.id || canModerate) && <button onClick={() => deleteContent('threads', thread.id)} className="text-rose-300">Eliminar</button>}</div>
+          <div className="mt-3 flex justify-between text-xs text-slate-500"><span>{thread.likes_count || 0} reacciones</span><span className="flex gap-3">{thread.user_id === session.user.id && <button onClick={() => setEditingThread({ id: thread.id, content: thread.content })} className="inline-flex items-center gap-1 text-violet-300"><Pencil className="h-3 w-3" />Editar</button>}{(thread.user_id === session.user.id || canModerate) && <button onClick={() => deleteContent('threads', thread.id)} className="text-rose-300">Eliminar</button>}</span></div>
+          {editingThread?.id === thread.id && <form onSubmit={updateThread} className="mt-3 flex gap-2"><input value={editingThread.content} onChange={(event) => setEditingThread({ ...editingThread, content: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" /><button className="rounded-lg bg-violet-500 px-3 py-2 text-xs">Guardar</button><button type="button" onClick={() => setEditingThread(null)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">Cancelar</button></form>}
         </article>
       ))}
       {!threads.length && <p className="text-sm text-slate-400">Todavía no hay hilos.</p>}
@@ -185,7 +211,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const renderPlans = () => (
     <div className="space-y-4">
       <form onSubmit={createPlan} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-2"><input required value={planForm.title} onChange={(event) => setPlanForm({ ...planForm, title: event.target.value })} placeholder="Título del plan" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><input required value={planForm.category} onChange={(event) => setPlanForm({ ...planForm, category: event.target.value })} placeholder="Categoría" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><textarea required value={planForm.description} onChange={(event) => setPlanForm({ ...planForm, description: event.target.value })} placeholder="Descripción" className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white md:col-span-2" /><input required type="datetime-local" value={planForm.meet_time} onChange={(event) => setPlanForm({ ...planForm, meet_time: event.target.value })} className="rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white" /><button className="rounded-xl bg-violet-500 px-4 py-3">Crear plan</button></form>
-      {plans.map((plan) => <div key={plan.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="flex justify-between"><strong>{plan.title}</strong><span className="text-sm text-slate-400">{new Date(plan.meet_time).toLocaleString()}</span></div><p className="mt-2 text-sm text-slate-300">{plan.description}</p><p className="mt-2 text-xs text-slate-500">{plan.category} · creado por {profileName(plan.creator_id)}</p>{canModerate && <button onClick={() => deleteContent('casual_plans', plan.id)} className="mt-3 text-xs text-rose-300">Eliminar</button>}</div>)}
+      {plans.map((plan) => <div key={plan.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="flex justify-between"><strong>{plan.title}</strong><span className="text-sm text-slate-400">{new Date(plan.meet_time).toLocaleString()}</span></div><p className="mt-2 text-sm text-slate-300">{plan.description}</p><p className="mt-2 text-xs text-slate-500">{plan.category} · creado por {profileName(plan.creator_id)}</p><div className="mt-3 flex gap-3 text-xs">{plan.creator_id === session.user.id && <button onClick={() => setEditingPlan({ ...plan, meet_time: plan.meet_time.slice(0, 16) })} className="inline-flex items-center gap-1 text-violet-300"><Pencil className="h-3 w-3" />Editar</button>}{(plan.creator_id === session.user.id || canModerate) && <button onClick={() => deleteContent('casual_plans', plan.id)} className="text-rose-300">Eliminar</button>}</div>{editingPlan?.id === plan.id && <form onSubmit={updatePlan} className="mt-3 grid gap-2"><input required value={editingPlan.title} onChange={(event) => setEditingPlan({ ...editingPlan, title: event.target.value })} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" /><textarea required value={editingPlan.description} onChange={(event) => setEditingPlan({ ...editingPlan, description: event.target.value })} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" /><div className="flex gap-2"><input required value={editingPlan.category} onChange={(event) => setEditingPlan({ ...editingPlan, category: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" /><input required type="datetime-local" value={editingPlan.meet_time} onChange={(event) => setEditingPlan({ ...editingPlan, meet_time: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" /></div><div className="flex gap-2"><button className="rounded-lg bg-violet-500 px-3 py-2 text-xs">Guardar</button><button type="button" onClick={() => setEditingPlan(null)} className="rounded-lg border border-white/10 px-3 py-2 text-xs">Cancelar</button></div></form>}</div>)}
     </div>
   )
 

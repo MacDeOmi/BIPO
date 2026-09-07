@@ -247,10 +247,11 @@ ON threads FOR UPDATE
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "threads_delete_moderator"
+CREATE POLICY "threads_delete_owner_or_moderator"
 ON threads FOR DELETE
 USING (
-  EXISTS (
+  auth.uid() = user_id
+  OR EXISTS (
     SELECT 1
     FROM profiles p
     WHERE p.id = auth.uid()
@@ -280,10 +281,11 @@ ON casual_plans FOR UPDATE
 USING (auth.uid() = creator_id)
 WITH CHECK (auth.uid() = creator_id);
 
-CREATE POLICY "casual_plans_delete_moderator"
+CREATE POLICY "casual_plans_delete_owner_or_moderator"
 ON casual_plans FOR DELETE
 USING (
-  EXISTS (
+  auth.uid() = creator_id
+  OR EXISTS (
     SELECT 1
     FROM profiles p
     WHERE p.id = auth.uid()
