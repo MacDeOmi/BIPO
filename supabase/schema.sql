@@ -96,7 +96,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data ->> 'career', 'Sin carrera'),
     COALESCE((NEW.raw_user_meta_data ->> 'semester')::int, 1),
     COALESCE(NEW.raw_user_meta_data ->> 'bio', 'Hola, soy parte de la comunidad.'),
-    COALESCE(NEW.raw_user_meta_data ->> 'interests', '[]')::TEXT[]
+    ARRAY['General']::TEXT[]
   )
   ON CONFLICT (id) DO NOTHING;
 

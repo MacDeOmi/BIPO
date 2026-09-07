@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   CalendarDays,
@@ -21,12 +21,16 @@ function App() {
   const [authMode, setAuthMode] = useState('login')
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [remember, setRemember] = useState(true)
   const [name, setName] = useState('')
   const [career, setCareer] = useState('')
   const [semester, setSemester] = useState('1')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [session, setSession] = useState(null)
+  const pendingPasswordSetup = useRef(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -41,7 +45,9 @@ function App() {
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, currentSession) => {
       setSession(currentSession)
-      setView(currentSession ? 'dashboard' : 'auth')
+      setView(currentSession
+        ? (pendingPasswordSetup.current ? 'set-password' : 'dashboard')
+        : 'auth')
     })
 
     return () => listener.subscription.unsubscribe()
@@ -52,7 +58,37 @@ function App() {
     return !!session.user && !!session.user.email && EMAIL_REGEX.test(session.user.email)
   }, [session])
 
-  const handleSendOtp = async (event) => {
+  const handlePasswordLogin = async (event) => {
+    event.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    if (!EMAIL_REGEX.test(email)) {
+      setMessage('Solo se aceptan correos institucionales @anahuac.mx')
+      setLoading(false)
+      return
+    }
+
+    if (!supabase) {
+      setMessage('Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
+      setLoading(false)
+      return
+    }
+
+    localStorage.setItem('bipo_remember', String(remember))
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setMessage('Correo o contraseña incorrectos.')
+    } else {
+      setMessage('Sesión iniciada correctamente.')
+      setView('dashboard')
+    }
+
+    setLoading(false)
+  }
+
+  const handleRegisterOtp = async (event) => {
     event.preventDefault()
     setLoading(true)
     setMessage('')
@@ -72,16 +108,14 @@ function App() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: authMode === 'register',
+        shouldCreateUser: true,
       },
     })
 
     if (error) {
       setMessage(error.message)
     } else {
-      setMessage(authMode === 'register'
-        ? 'Código enviado. Revisa tu correo para confirmar tu registro.'
-        : 'Código enviado. Revisa tu correo institucional.')
+      setMessage('Código enviado. Revisa tu correo para confirmar tu registro.')
       setView('otp')
     }
 
@@ -99,6 +133,7 @@ function App() {
       return
     }
 
+    pendingPasswordSetup.current = authMode === 'register'
     const { data, error } = await supabase.auth.verifyOtp({
       email,
       token: otp,
@@ -109,8 +144,42 @@ function App() {
       setMessage(error.message)
     } else {
       setSession(data.session)
+      setView(authMode === 'register' ? 'set-password' : 'dashboard')
+      setMessage(authMode === 'register'
+        ? 'Correo confirmado. Ahora crea una contraseña.'
+        : 'Sesión confirmada correctamente.')
+    }
+
+    setLoading(false)
+  }
+
+  const handleSetPassword = async (event) => {
+    event.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    if (password.length < 6) {
+      setMessage('La contraseña debe tener al menos 6 caracteres.')
+      setLoading(false)
+      return
+    }
+
+    if (password !== passwordConfirmation) {
+      setMessage('Las contraseñas no coinciden.')
+      setLoading(false)
+      return
+    }
+
+    const { error } = await supabase.auth.updateUser({ password })
+
+    if (error) {
+      setMessage(error.message)
+    } else {
+      pendingPasswordSetup.current = false
+      setPassword('')
+      setPasswordConfirmation('')
       setView('dashboard')
-      setMessage('Sesión confirmada correctamente.')
+      setMessage('Cuenta creada correctamente.')
     }
 
     setLoading(false)
@@ -249,7 +318,7 @@ function App() {
                 </button>
               </div>
 
-              <form onSubmit={handleSendOtp} className="space-y-4">
+              <form onSubmit={authMode === 'register' ? handleRegisterOtp : handlePasswordLogin} className="space-y-4">
                 <label className="block text-sm text-slate-300">
                   Correo institucional
                   <input
@@ -262,12 +331,38 @@ function App() {
                   />
                 </label>
 
+                {authMode === 'login' && (
+                  <>
+                    <label className="block text-sm text-slate-300">
+                      Contraseña
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Tu contraseña"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                        required
+                      />
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={remember}
+                        onChange={(e) => setRemember(e.target.checked)}
+                        className="h-4 w-4 accent-violet-500"
+                      />
+                      Recordarme en este dispositivo
+                    </label>
+                  </>
+                )}
+
                 <button
                   type="submit"
                   disabled={loading}
                   className="w-full rounded-xl bg-violet-500 px-4 py-3 font-medium text-white transition hover:bg-violet-400 disabled:opacity-60"
                 >
-                  {loading ? 'Enviando...' : authMode === 'register' ? 'Crear cuenta con OTP' : 'Enviar código OTP'}
+                  {loading ? 'Procesando...' : authMode === 'register' ? 'Crear cuenta con OTP' : 'Iniciar sesión'}
                 </button>
               </form>
 
@@ -298,6 +393,45 @@ function App() {
                 className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-60"
               >
                 {loading ? 'Verificando...' : 'Confirmar acceso'}
+              </button>
+            </form>
+            {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
+          </section>
+        )}
+
+        {view === 'set-password' && (
+          <section className="mx-auto max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+            <h2 className="mb-2 text-2xl font-semibold text-white">Crea tu contraseña</h2>
+            <p className="mb-4 text-sm text-slate-300">Tu correo ya fue confirmado. Usa esta contraseña para iniciar sesión después.</p>
+            <form onSubmit={handleSetPassword} className="space-y-4">
+              <label className="block text-sm text-slate-300">
+                Contraseña
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={6}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
+                  required
+                />
+              </label>
+              <label className="block text-sm text-slate-300">
+                Repite tu contraseña
+                <input
+                  type="password"
+                  value={passwordConfirmation}
+                  onChange={(e) => setPasswordConfirmation(e.target.value)}
+                  minLength={6}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-violet-500 px-4 py-3 font-medium text-white transition hover:bg-violet-400 disabled:opacity-60"
+              >
+                {loading ? 'Guardando...' : 'Guardar contraseña'}
               </button>
             </form>
             {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
