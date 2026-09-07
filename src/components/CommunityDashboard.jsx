@@ -30,6 +30,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const [datingProfiles, setDatingProfiles] = useState([])
   const [plans, setPlans] = useState([])
   const [messages, setMessages] = useState([])
+  const [messageRequests, setMessageRequests] = useState([])
   const [follows, setFollows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,7 +51,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
     let mounted = true
     const loadData = async () => {
       setLoading(true)
-      const [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult] = await Promise.all([
+      const [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult, requestsResult] = await Promise.all([
         supabase.from('profiles').select('id, full_name, career, semester, bio, avatar_url, role, is_banned'),
         supabase.from('threads').select('id, user_id, content, likes_count, created_at').order('created_at', { ascending: false }),
         supabase.from('friendships').select('id, requester_id, addressee_id, status').order('created_at', { ascending: false }),
@@ -58,9 +59,10 @@ export function CommunityDashboard({ supabase, session, profile }) {
         supabase.from('casual_plans').select('id, creator_id, title, description, category, meet_time, max_participants').order('meet_time', { ascending: true }),
         supabase.from('messages').select('id, sender_id, receiver_id, content, created_at').or(`sender_id.eq.${session.user.id},receiver_id.eq.${session.user.id}`).order('created_at', { ascending: true }),
         supabase.from('follows').select('follower_id, following_id'),
+        supabase.from('message_requests').select('id, sender_id, receiver_id, content, status, created_at').or(`sender_id.eq.${session.user.id},receiver_id.eq.${session.user.id}`).eq('status', 'pending').order('created_at', { ascending: false }),
       ])
 
-      const result = [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult].find((item) => item.error)
+      const result = [profilesResult, threadsResult, friendsResult, datingResult, plansResult, messagesResult, followsResult, requestsResult].find((item) => item.error)
       if (result?.error) {
         if (mounted) setError(result.error.message)
       } else if (mounted) {
@@ -71,6 +73,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
         setPlans(plansResult.data || [])
         setMessages(messagesResult.data || [])
         setFollows(followsResult.data || [])
+        setMessageRequests(requestsResult.data || [])
         setError('')
       }
       if (mounted) setLoading(false)
@@ -144,6 +147,12 @@ export function CommunityDashboard({ supabase, session, profile }) {
       setMessageText('')
       setError(table === 'messages' ? '' : 'Mensaje enviado a solicitudes.')
     }
+    setReload((value) => value + 1)
+  }
+
+  const respondToMessageRequest = async (requestId, status) => {
+    const { error: updateError } = await supabase.from('message_requests').update({ status }).eq('id', requestId).eq('receiver_id', session.user.id)
+    if (updateError) setError(updateError.message)
     setReload((value) => value + 1)
   }
 
@@ -240,7 +249,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   )
 
   const renderMessages = () => (
-    <div className="space-y-4"><select value={selectedFriend} onChange={(event) => setSelectedFriend(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white"><option value="">Selecciona una persona</option>{profiles.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>{selectedFriend && !followsMutually(selectedFriend) && <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">Esta persona no te sigue mutuamente. Tu primer mensaje se enviará como solicitud y deberá aceptarlo para abrir el chat libre.</div>}<div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/60 p-4">{messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-8 bg-violet-500/30' : 'mr-8 bg-slate-800'}`}>{message.content}</div>)}</div><form onSubmit={sendMessage} className="flex gap-3"><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white" /><button className="rounded-xl bg-emerald-500 px-4 py-3">Enviar</button></form></div>
+    <div className="space-y-4"><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><div className="mb-3 flex items-center justify-between"><h4 className="font-semibold">Solicitudes de mensajes</h4><span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-200">{messageRequests.filter((request) => request.receiver_id === session.user.id).length}</span></div>{messageRequests.filter((request) => request.receiver_id === session.user.id).map((request) => <div key={request.id} className="border-t border-white/10 py-3"><button onClick={() => openProfile(request.sender_id)} className="font-medium text-violet-300 hover:underline">{profileName(request.sender_id)}</button><p className="my-2 text-sm text-slate-300">{request.content}</p><div className="flex gap-2"><button onClick={() => respondToMessageRequest(request.id, 'accepted')} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs">Aceptar</button><button onClick={() => respondToMessageRequest(request.id, 'rejected')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs">Rechazar</button></div></div>)}{!messageRequests.some((request) => request.receiver_id === session.user.id) && <p className="text-sm text-slate-400">No tienes solicitudes pendientes.</p>}</div><select value={selectedFriend} onChange={(event) => setSelectedFriend(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white"><option value="">Selecciona una persona</option>{profiles.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>{selectedFriend && !followsMutually(selectedFriend) && <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">Esta persona no te sigue mutuamente. Tu primer mensaje se enviará como solicitud y deberá aceptarlo para abrir el chat libre.</div>}<div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/60 p-4">{messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-8 bg-violet-500/30' : 'mr-8 bg-slate-800'}`}>{message.content}</div>)}</div><form onSubmit={sendMessage} className="flex gap-3"><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white" /><button className="rounded-xl bg-emerald-500 px-4 py-3">Enviar</button></form></div>
   )
 
   const renderAdmin = () => (
