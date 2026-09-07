@@ -6,6 +6,7 @@ export function DatingPanel({ supabase, session, profiles }) {
   const [candidates, setCandidates] = useState([])
   const [index, setIndex] = useState(0)
   const [setup, setSetup] = useState({ gender: '', preferredGenders: '', bio: '', interests: '' })
+  const [avatarFile, setAvatarFile] = useState(null)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -23,8 +24,20 @@ export function DatingPanel({ supabase, session, profiles }) {
 
   const saveSetup = async (event) => {
     event.preventDefault()
+    if (!avatarFile) {
+      setMessage('La foto principal es obligatoria para activar Citas.')
+      return
+    }
+    const path = `${session.user.id}/${Date.now()}-${avatarFile.name}`
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true })
+    if (uploadError) {
+      setMessage(uploadError.message)
+      return
+    }
+    const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(path)
     const { error } = await supabase.from('dating_profiles').upsert({
       user_id: session.user.id,
+      avatar_url: publicUrl.publicUrl,
       gender: setup.gender,
       preferred_genders: setup.preferredGenders.split(',').map((item) => item.trim()).filter(Boolean),
       bio: setup.bio,
@@ -32,7 +45,10 @@ export function DatingPanel({ supabase, session, profiles }) {
       is_active: true,
     })
     if (error) setMessage(error.message)
-    else setMessage('Completa avatar_url en tu perfil para activar Descubrir.')
+    else {
+      setDatingProfile({ avatar_url: publicUrl.publicUrl })
+      setMessage('Perfil de citas activado.')
+    }
   }
 
   const act = async (action) => {
@@ -56,7 +72,7 @@ export function DatingPanel({ supabase, session, profiles }) {
   })
 
   if (!datingProfile?.avatar_url) {
-    return <div className="space-y-4"><div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-amber-100"><ImagePlus className="mr-2 inline h-5 w-5" />Configura tu perfil de citas antes de descubrir personas.</div><form onSubmit={saveSetup} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4"><select required value={setup.gender} onChange={(event) => setSetup({ ...setup, gender: event.target.value })} className="rounded-xl bg-slate-900 p-3 text-white"><option value="">Tu género</option><option>Hombre</option><option>Mujer</option><option>No binario</option></select><input value={setup.preferredGenders} onChange={(event) => setSetup({ ...setup, preferredGenders: event.target.value })} placeholder="Preferencias: Hombre, Mujer" className="rounded-xl bg-slate-900 p-3 text-white" /><textarea value={setup.bio} onChange={(event) => setSetup({ ...setup, bio: event.target.value })} placeholder="Biografía corta" className="rounded-xl bg-slate-900 p-3 text-white" /><input value={setup.interests} onChange={(event) => setSetup({ ...setup, interests: event.target.value })} placeholder="Intereses separados por comas" className="rounded-xl bg-slate-900 p-3 text-white" /><button className="rounded-xl bg-violet-500 p-3">Guardar configuración</button></form>{message && <p className="text-sm text-amber-300">{message}</p>}</div>
+    return <div className="space-y-4"><div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-amber-100"><ImagePlus className="mr-2 inline h-5 w-5" />Configura tu perfil de citas antes de descubrir personas.</div><form onSubmit={saveSetup} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4"><label className="text-sm text-slate-300">Foto principal<input required type="file" accept="image/*" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} className="mt-2 block w-full text-sm text-slate-300" /></label><select required value={setup.gender} onChange={(event) => setSetup({ ...setup, gender: event.target.value })} className="rounded-xl bg-slate-900 p-3 text-white"><option value="">Tu género</option><option>Hombre</option><option>Mujer</option><option>No binario</option></select><input value={setup.preferredGenders} onChange={(event) => setSetup({ ...setup, preferredGenders: event.target.value })} placeholder="Preferencias: Hombre, Mujer" className="rounded-xl bg-slate-900 p-3 text-white" /><textarea value={setup.bio} onChange={(event) => setSetup({ ...setup, bio: event.target.value })} placeholder="Biografía corta" className="rounded-xl bg-slate-900 p-3 text-white" /><input value={setup.interests} onChange={(event) => setSetup({ ...setup, interests: event.target.value })} placeholder="Intereses separados por comas" className="rounded-xl bg-slate-900 p-3 text-white" /><button className="rounded-xl bg-violet-500 p-3">Guardar configuración</button></form>{message && <p className="text-sm text-amber-300">{message}</p>}</div>
   }
 
   const candidate = candidates[index]
