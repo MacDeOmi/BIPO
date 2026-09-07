@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   CalendarDays,
@@ -14,15 +14,11 @@ import {
 import { supabase } from './lib/supabase'
 import './App.css'
 
-const EMAIL_REGEX = /^[^\s@]+@anahuac\.mx$/i
-
 function App() {
   const [view, setView] = useState('auth')
   const [authMode, setAuthMode] = useState('login')
   const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
   const [password, setPassword] = useState('')
-  const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [remember, setRemember] = useState(true)
   const [name, setName] = useState('')
   const [career, setCareer] = useState('')
@@ -30,7 +26,6 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [session, setSession] = useState(null)
-  const pendingPasswordSetup = useRef(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -45,29 +40,20 @@ function App() {
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, currentSession) => {
       setSession(currentSession)
-      setView(currentSession
-        ? (pendingPasswordSetup.current ? 'set-password' : 'dashboard')
-        : 'auth')
+      setView(currentSession ? 'dashboard' : 'auth')
     })
 
     return () => listener.subscription.unsubscribe()
   }, [])
 
   const canUsePlatform = useMemo(() => {
-    if (!session) return false
-    return !!session.user && !!session.user.email && EMAIL_REGEX.test(session.user.email)
+    return !!session?.user
   }, [session])
 
   const handlePasswordLogin = async (event) => {
     event.preventDefault()
     setLoading(true)
     setMessage('')
-
-    if (!EMAIL_REGEX.test(email)) {
-      setMessage('Solo se aceptan correos institucionales @anahuac.mx')
-      setLoading(false)
-      return
-    }
 
     if (!supabase) {
       setMessage('Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
@@ -88,36 +74,10 @@ function App() {
     setLoading(false)
   }
 
-  const handleMicrosoftLogin = async () => {
-    setMessage('')
-
-    if (!supabase) {
-      setMessage('Falta configurar Supabase en el entorno.')
-      return
-    }
-
-    localStorage.setItem('bipo_remember', 'true')
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'azure',
-      options: {
-        redirectTo: window.location.origin,
-        scopes: 'email',
-      },
-    })
-
-    if (error) setMessage(error.message)
-  }
-
   const handleRegister = async (event) => {
     event.preventDefault()
     setLoading(true)
     setMessage('')
-
-    if (!EMAIL_REGEX.test(email)) {
-      setMessage('Solo se aceptan correos institucionales @anahuac.mx')
-      setLoading(false)
-      return
-    }
 
     if (!supabase) {
       setMessage('Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
@@ -136,69 +96,6 @@ function App() {
       setMessage('Cuenta creada correctamente.')
     } else {
       setMessage('Cuenta creada. Revisa tu correo y confirma tu cuenta antes de iniciar sesión.')
-    }
-
-    setLoading(false)
-  }
-
-  const handleVerifyOtp = async (event) => {
-    event.preventDefault()
-    setLoading(true)
-    setMessage('')
-
-    if (!supabase) {
-      setMessage('Falta configurar Supabase en el entorno.')
-      setLoading(false)
-      return
-    }
-
-    pendingPasswordSetup.current = authMode === 'register'
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: 'email',
-    })
-
-    if (error) {
-      setMessage(error.message)
-    } else {
-      setSession(data.session)
-      setView(authMode === 'register' ? 'set-password' : 'dashboard')
-      setMessage(authMode === 'register'
-        ? 'Correo confirmado. Ahora crea una contraseña.'
-        : 'Sesión confirmada correctamente.')
-    }
-
-    setLoading(false)
-  }
-
-  const handleSetPassword = async (event) => {
-    event.preventDefault()
-    setLoading(true)
-    setMessage('')
-
-    if (password.length < 6) {
-      setMessage('La contraseña debe tener al menos 6 caracteres.')
-      setLoading(false)
-      return
-    }
-
-    if (password !== passwordConfirmation) {
-      setMessage('Las contraseñas no coinciden.')
-      setLoading(false)
-      return
-    }
-
-    const { error } = await supabase.auth.updateUser({ password })
-
-    if (error) {
-      setMessage(error.message)
-    } else {
-      pendingPasswordSetup.current = false
-      setPassword('')
-      setPasswordConfirmation('')
-      setView('dashboard')
-      setMessage('Cuenta creada correctamente.')
     }
 
     setLoading(false)
@@ -272,7 +169,7 @@ function App() {
           ) : (
             <div className="flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
               <Lock className="h-4 w-4" />
-              Acceso @anahuac.mx
+              Acceso con correo y contraseña
             </div>
           )}
         </div>
@@ -339,12 +236,12 @@ function App() {
 
               <form onSubmit={authMode === 'register' ? handleRegister : handlePasswordLogin} className="space-y-4">
                 <label className="block text-sm text-slate-300">
-                  Correo institucional
+                  Correo electrónico
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="nombre@anahuac.mx"
+                    placeholder="tu-correo@ejemplo.com"
                     className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none ring-0 transition focus:border-violet-400"
                     required
                   />
@@ -386,95 +283,8 @@ function App() {
                 </button>
               </form>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
-                <span className="h-px flex-1 bg-white/10" />
-                o continúa con
-                <span className="h-px flex-1 bg-white/10" />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleMicrosoftLogin}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white px-4 py-3 font-medium text-slate-900 transition hover:bg-slate-100"
-              >
-                <span className="grid h-5 w-5 grid-cols-2 gap-0.5" aria-hidden="true">
-                  <span className="bg-red-500" />
-                  <span className="bg-green-500" />
-                  <span className="bg-blue-500" />
-                  <span className="bg-yellow-500" />
-                </span>
-                Continuar con Microsoft
-              </button>
-
               {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
             </div>
-          </section>
-        )}
-
-        {view === 'otp' && (
-          <section className="mx-auto max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-            <h2 className="mb-4 text-2xl font-semibold text-white">Verifica tu código</h2>
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <label className="block text-sm text-slate-300">
-                Código de 6 dígitos
-                <input
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
-                  required
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-medium text-white transition hover:bg-emerald-400 disabled:opacity-60"
-              >
-                {loading ? 'Verificando...' : 'Confirmar acceso'}
-              </button>
-            </form>
-            {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
-          </section>
-        )}
-
-        {view === 'set-password' && (
-          <section className="mx-auto max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-            <h2 className="mb-2 text-2xl font-semibold text-white">Crea tu contraseña</h2>
-            <p className="mb-4 text-sm text-slate-300">Tu correo ya fue confirmado. Usa esta contraseña para iniciar sesión después.</p>
-            <form onSubmit={handleSetPassword} className="space-y-4">
-              <label className="block text-sm text-slate-300">
-                Contraseña
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  minLength={6}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
-                  required
-                />
-              </label>
-              <label className="block text-sm text-slate-300">
-                Repite tu contraseña
-                <input
-                  type="password"
-                  value={passwordConfirmation}
-                  onChange={(e) => setPasswordConfirmation(e.target.value)}
-                  minLength={6}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
-                  required
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-xl bg-violet-500 px-4 py-3 font-medium text-white transition hover:bg-violet-400 disabled:opacity-60"
-              >
-                {loading ? 'Guardando...' : 'Guardar contraseña'}
-              </button>
-            </form>
-            {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
           </section>
         )}
 
