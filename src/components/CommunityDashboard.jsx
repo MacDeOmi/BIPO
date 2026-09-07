@@ -96,6 +96,10 @@ export function CommunityDashboard({ supabase, session, profile }) {
     setSelectedProfileId(id)
     setActiveTab('profile')
   }
+  const openMessageComposer = (id) => {
+    setSelectedFriend(id)
+    setActiveTab('messages')
+  }
   const canModerate = profile?.role === 'admin' || profile?.role === 'moderator'
   const acceptedFriends = friends.filter((friend) => friend.status === 'accepted' && (friend.requester_id === session.user.id || friend.addressee_id === session.user.id))
   const friendIds = acceptedFriends.map((friend) => friend.requester_id === session.user.id ? friend.addressee_id : friend.requester_id)
@@ -236,7 +240,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   )
 
   const renderMessages = () => (
-    <div className="space-y-4"><select value={selectedFriend} onChange={(event) => setSelectedFriend(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white"><option value="">Selecciona una amistad aceptada</option>{friendIds.map((id) => <option key={id} value={id}>{profileName(id)}</option>)}</select><div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/60 p-4">{messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-8 bg-violet-500/30' : 'mr-8 bg-slate-800'}`}>{message.content}</div>)}</div><form onSubmit={sendMessage} className="flex gap-3"><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white" /><button className="rounded-xl bg-emerald-500 px-4 py-3">Enviar</button></form></div>
+    <div className="space-y-4"><select value={selectedFriend} onChange={(event) => setSelectedFriend(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white"><option value="">Selecciona una persona</option>{profiles.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>{selectedFriend && !followsMutually(selectedFriend) && <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">Esta persona no te sigue mutuamente. Tu primer mensaje se enviará como solicitud y deberá aceptarlo para abrir el chat libre.</div>}<div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/60 p-4">{messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-8 bg-violet-500/30' : 'mr-8 bg-slate-800'}`}>{message.content}</div>)}</div><form onSubmit={sendMessage} className="flex gap-3"><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white" /><button className="rounded-xl bg-emerald-500 px-4 py-3">Enviar</button></form></div>
   )
 
   const renderAdmin = () => (
@@ -249,7 +253,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
     if (activeTab === 'friends') return renderFriends()
     if (activeTab === 'dating') return <DatingPanel supabase={supabase} session={session} profiles={profiles} />
     if (activeTab === 'plans') return renderPlans()
-    if (activeTab === 'profile') return <SocialProfilePanel supabase={supabase} session={session} profiles={profiles} selectedProfileId={selectedProfileId} onSelectProfile={setSelectedProfileId} />
+    if (activeTab === 'profile') return <SocialProfilePanel supabase={supabase} session={session} profiles={profiles} selectedProfileId={selectedProfileId} onSelectProfile={setSelectedProfileId} onMessage={openMessageComposer} />
     return renderMessages()
   }
 
