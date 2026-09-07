@@ -1,4 +1,4 @@
-export function ProfileForm({ session, name, career, semester, setName, setCareer, setSemester, onSubmit, loading, message }) {
+export function ProfileForm({ career, semester, setCareer, setSemester, onSubmit, loading, message }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 lg:col-span-2">
       <div className="flex items-center gap-3">
@@ -12,25 +12,15 @@ export function ProfileForm({ session, name, career, semester, setName, setCaree
       </div>
 
       <form onSubmit={onSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
-        <label className="block text-sm text-slate-300 md:col-span-2">
-          Nombre completo
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
-            placeholder="Ana López"
-          />
-        </label>
-
         <label className="block text-sm text-slate-300">
           Carrera
           <input
             type="text"
             value={career}
-            onChange={(e) => setCareer(e.target.value)}
+            onChange={(event) => setCareer(event.target.value)}
             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
             placeholder="Diseño Digital"
+            required
           />
         </label>
 
@@ -41,8 +31,9 @@ export function ProfileForm({ session, name, career, semester, setName, setCaree
             min="1"
             max="12"
             value={semester}
-            onChange={(e) => setSemester(e.target.value)}
+            onChange={(event) => setSemester(event.target.value)}
             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
+            required
           />
         </label>
 
@@ -56,10 +47,6 @@ export function ProfileForm({ session, name, career, semester, setName, setCaree
       </form>
 
       {message && <p className="mt-4 text-sm text-emerald-300">{message}</p>}
-
-      <p className="mt-5 text-xs text-slate-400">
-        Cuenta autenticada: {session?.user?.email || 'Sin correo'}
-      </p>
     </div>
   )
 }

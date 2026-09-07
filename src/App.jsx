@@ -21,7 +21,6 @@ function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
-  const [name, setName] = useState('')
   const [career, setCareer] = useState('')
   const [semester, setSemester] = useState('1')
   const [loading, setLoading] = useState(false)
@@ -50,7 +49,6 @@ function App() {
         .maybeSingle()
 
       setProfile(profileData)
-      setName(profileData?.full_name && profileData.full_name !== 'Nuevo usuario' ? profileData.full_name : '')
       setCareer(profileData?.career && profileData.career !== 'Sin carrera' ? profileData.career : '')
       setSemester(String(profileData?.semester || 1))
       setProfileLoading(false)
@@ -128,9 +126,10 @@ function App() {
       return
     }
 
+    const username = session.user.email?.split('@')[0] || session.user.email
     const { error } = await supabase.from('profiles').upsert({
       id: session.user.id,
-      full_name: name || session.user.email,
+      full_name: username,
       career: career || 'Sin carrera',
       semester: Number(semester) || 1,
       bio: 'Nuevo miembro de la comunidad universitaria.',
@@ -143,7 +142,7 @@ function App() {
       setProfile((currentProfile) => ({
         ...currentProfile,
         id: session.user.id,
-        full_name: name || session.user.email,
+        full_name: username,
         career: career || 'Sin carrera',
         semester: Number(semester) || 1,
       }))
@@ -329,16 +328,6 @@ function App() {
                 </div>
 
                 <form onSubmit={handleCreateProfile} className="mt-6 grid gap-4 md:grid-cols-2">
-                  <label className="block text-sm text-slate-300 md:col-span-2">
-                    Nombre completo
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-violet-400"
-                    />
-                  </label>
-
                   <label className="block text-sm text-slate-300">
                     Carrera
                     <input
