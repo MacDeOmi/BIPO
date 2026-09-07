@@ -36,6 +36,36 @@ CREATE TABLE IF NOT EXISTS public.message_requests (
   CHECK (sender_id <> receiver_id)
 );
 
+CREATE OR REPLACE FUNCTION public.accept_message_request(request_id UUID)
+RETURNS public.message_requests
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  request_row public.message_requests;
+BEGIN
+  UPDATE public.message_requests
+  SET status = 'accepted'
+  WHERE id = request_id
+    AND receiver_id = auth.uid()
+    AND status = 'pending'
+  RETURNING * INTO request_row;
+
+  IF request_row.id IS NULL THEN
+    RAISE EXCEPTION 'Message request not found or not owned by current user';
+  END IF;
+
+  INSERT INTO public.messages (sender_id, receiver_id, content, type)
+  VALUES (request_row.sender_id, request_row.receiver_id, request_row.content, 'direct');
+
+  RETURN request_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.accept_message_request(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.accept_message_request(UUID) TO authenticated;
+
 ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dating_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_requests ENABLE ROW LEVEL SECURITY;
