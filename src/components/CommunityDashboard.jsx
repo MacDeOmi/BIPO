@@ -154,7 +154,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
     const { error: updateError } = status === 'accepted'
       ? await supabase.rpc('accept_message_request', { request_id: requestId })
       : await supabase.from('message_requests').update({ status }).eq('id', requestId).eq('receiver_id', session.user.id)
-    if (updateError) setError(updateError.message)
+    if (updateError) setError(`${updateError.message} Ejecuta supabase/chat_request_patch.sql en Supabase.`)
     setReload((value) => value + 1)
   }
 

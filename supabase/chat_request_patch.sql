@@ -1,0 +1,44 @@
+-- Run this in Supabase SQL Editor to repair message requests and chats.
+
+CREATE OR REPLACE FUNCTION public.accept_message_request(request_id UUID)
+RETURNS public.message_requests
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  request_row public.message_requests;
+BEGIN
+  UPDATE public.message_requests
+  SET status = 'accepted'
+  WHERE id = request_id
+    AND receiver_id = auth.uid()
+    AND status = 'pending'
+  RETURNING * INTO request_row;
+
+  IF request_row.id IS NULL THEN
+    RAISE EXCEPTION 'Message request not found or already processed';
+  END IF;
+
+  INSERT INTO public.messages (sender_id, receiver_id, content, type)
+  VALUES (request_row.sender_id, request_row.receiver_id, request_row.content, 'direct');
+
+  RETURN request_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.accept_message_request(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.accept_message_request(UUID) TO authenticated;
+
+-- Repair requests accepted before the conversion function existed.
+INSERT INTO public.messages (sender_id, receiver_id, content, type)
+SELECT request.sender_id, request.receiver_id, request.content, 'direct'
+FROM public.message_requests request
+WHERE request.status = 'accepted'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.messages message
+    WHERE message.sender_id = request.sender_id
+      AND message.receiver_id = request.receiver_id
+      AND message.content = request.content
+  );
