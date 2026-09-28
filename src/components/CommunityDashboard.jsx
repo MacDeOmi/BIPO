@@ -44,6 +44,7 @@ export function CommunityDashboard({ supabase, session, profile }) {
   const [editingThread, setEditingThread] = useState(null)
   const [editingPlan, setEditingPlan] = useState(null)
   const [selectedProfileId, setSelectedProfileId] = useState(session.user.id)
+  const [showRequestsSubpage, setShowRequestsSubpage] = useState(false)
 
   useEffect(() => {
     if (!supabase || !session?.user) return undefined
@@ -259,47 +260,117 @@ export function CommunityDashboard({ supabase, session, profile }) {
   )
 
   const renderMessages = () => {
+    const acceptedChatUsers = [...new Set(messages.flatMap(m => [m.sender_id, m.receiver_id]).filter(id => id !== session.user.id))];
+    const pendingIncomingUsers = [...new Set(messageRequests.filter(r => r.receiver_id === session.user.id && r.status === 'pending').map(r => r.sender_id))].filter(id => !acceptedChatUsers.includes(id));
+    const pendingOutgoingUsers = [...new Set(messageRequests.filter(r => r.sender_id === session.user.id && r.status === 'pending').map(r => r.receiver_id))].filter(id => !acceptedChatUsers.includes(id));
+    
+    const activeChats = [...new Set([...acceptedChatUsers, ...pendingOutgoingUsers])];
+
+    const getChatHistory = (userId) => [...messages, ...messageRequests]
+      .filter(m => m.sender_id === userId || m.receiver_id === userId)
+      .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+
     if (selectedFriend) {
-      const chatMessages = messages.filter(m => (m.sender_id === selectedFriend && m.receiver_id === session.user.id) || (m.sender_id === session.user.id && m.receiver_id === selectedFriend));
+      const chatHistory = getChatHistory(selectedFriend);
+      const hasPendingIncoming = chatHistory.some(m => m.status === 'pending' && m.receiver_id === session.user.id);
+
       return (
-        <div className="flex h-[500px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
+        <div className="flex h-[600px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
           <div className="flex items-center gap-3 border-b border-white/10 bg-slate-900 p-4">
             <button onClick={() => setSelectedFriend('')} className="text-slate-400 hover:text-white">&larr; Volver</button>
             <h4 className="font-semibold text-white">{profileName(selectedFriend)}</h4>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {!followsMutually(selectedFriend) && <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">Esta persona no te sigue mutuamente. Tu primer mensaje se enviará como solicitud y deberá aceptarlo para abrir el chat libre.</div>}
-            {chatMessages.length === 0 ? (
-               <p className="mt-10 text-center text-sm text-slate-500">No hay mensajes aún.</p>
+            {!followsMutually(selectedFriend) && !hasPendingIncoming && <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">Esta persona no te sigue mutuamente. Tus mensajes se enviarán como solicitudes hasta que te acepte.</div>}
+            {chatHistory.length === 0 ? (
+               <p className="mt-10 text-center text-sm text-slate-500">Aún no hay mensajes.</p>
             ) : (
-               chatMessages.map((message) => <div key={message.id} className={`max-w-[85%] rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-auto rounded-br-none bg-violet-600 text-white' : 'mr-auto rounded-bl-none bg-slate-800 text-slate-200'}`}>{message.content}</div>)
+               chatHistory.map((message) => <div key={message.id} className={`max-w-[85%] rounded-xl p-3 text-sm ${message.sender_id === session.user.id ? 'ml-auto rounded-br-none bg-violet-600 text-white' : 'mr-auto rounded-bl-none bg-slate-800 text-slate-200'}`}>{message.content}</div>)
             )}
           </div>
           
-          <form onSubmit={sendMessage} className="flex gap-2 border-t border-white/10 bg-slate-900 p-3">
-            <input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje..." className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-white focus:border-violet-500 focus:outline-none" />
-            <button className="rounded-xl bg-emerald-500 px-5 py-2.5 font-semibold text-white">Enviar</button>
-          </form>
+          {hasPendingIncoming ? (
+            <div className="border-t border-white/10 bg-slate-900 p-4 text-center">
+              <p className="mb-3 text-sm text-slate-300">¿Aceptar solicitud de mensaje?</p>
+              <div className="flex justify-center gap-3">
+                <button onClick={async () => {
+                  const pending = messageRequests.filter(r => r.sender_id === selectedFriend && r.receiver_id === session.user.id && r.status === 'pending');
+                  for (const req of pending) await respondToMessageRequest(req.id, 'accepted');
+                }} className="rounded-xl bg-emerald-500 px-6 py-2.5 font-semibold text-white">Aceptar</button>
+                <button onClick={async () => {
+                  const pending = messageRequests.filter(r => r.sender_id === selectedFriend && r.receiver_id === session.user.id && r.status === 'pending');
+                  for (const req of pending) await respondToMessageRequest(req.id, 'rejected');
+                  setSelectedFriend('');
+                }} className="rounded-xl border border-rose-500/50 px-6 py-2.5 font-semibold text-rose-300 hover:bg-rose-500/10">Rechazar</button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={sendMessage} className="flex gap-2 border-t border-white/10 bg-slate-900 p-3">
+              <input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Escribe un mensaje..." className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-white focus:border-violet-500 focus:outline-none" />
+              <button className="rounded-xl bg-emerald-500 px-5 py-2.5 font-semibold text-white">Enviar</button>
+            </form>
+          )}
+        </div>
+      )
+    }
+
+    if (showRequestsSubpage) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+            <button onClick={() => setShowRequestsSubpage(false)} className="text-slate-400 hover:text-white">&larr; Volver a chats</button>
+            <h4 className="font-semibold text-white">Solicitudes ({pendingIncomingUsers.length})</h4>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {pendingIncomingUsers.map(userId => {
+              const history = getChatHistory(userId);
+              const last = history[history.length - 1];
+              return (
+                <button key={userId} onClick={() => openConversation(userId)} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-left hover:border-violet-400 hover:bg-violet-500/15">
+                  <div className="flex items-center justify-between"><span className="font-medium text-white">{profileName(userId)}</span><span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-200">{history.length} msjs</span></div>
+                  <p className="mt-1 truncate text-sm text-slate-300">{last.content}</p>
+                </button>
+              )
+            })}
+            {pendingIncomingUsers.length === 0 && <p className="col-span-2 p-4 text-center text-sm text-slate-400">No tienes solicitudes pendientes.</p>}
+          </div>
         </div>
       )
     }
 
     return (
       <div className="space-y-4">
-        {conversationUsers.length > 0 && <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"><h4 className="mb-3 font-semibold text-white">Conversaciones</h4><div className="grid gap-2 md:grid-cols-2">{conversationUsers.map((userId) => { const items = conversationMessages(userId); const last = items[items.length - 1]; const unread = items.filter((message) => message.receiver_id === session.user.id && !message.is_read).length; return <button key={userId} onClick={() => openConversation(userId)} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-left hover:border-violet-400 hover:bg-violet-500/15"><div className="flex items-center justify-between"><span className="font-medium text-white">{profileName(userId)}</span>{unread > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{unread}</span>}</div><p className="mt-1 truncate text-sm text-slate-300">{last.content}</p><span className="mt-1 block text-xs text-slate-500">{new Date(last.created_at).toLocaleString()}</span></button> })}</div></div>}
+        {pendingIncomingUsers.length > 0 && (
+          <button onClick={() => setShowRequestsSubpage(true)} className="flex w-full items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 hover:bg-amber-500/20">
+            <span className="font-semibold text-amber-100">Solicitudes de mensajes nuevas</span>
+            <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-900">{pendingIncomingUsers.length}</span>
+          </button>
+        )}
         
-        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-          <div className="mb-3 flex items-center justify-between"><h4 className="font-semibold text-white">Solicitudes de mensajes</h4><span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-200">{messageRequests.filter((request) => request.receiver_id === session.user.id).length}</span></div>
-          {messageRequests.filter((request) => request.receiver_id === session.user.id).map((request) => <div key={request.id} className="border-t border-white/10 py-3"><button onClick={() => openProfile(request.sender_id)} className="font-medium text-violet-300 hover:underline">{profileName(request.sender_id)}</button><p className="my-2 text-sm text-slate-300">{request.content}</p><div className="flex gap-2"><button onClick={() => { setSelectedFriend(request.sender_id); respondToMessageRequest(request.id, 'accepted') }} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs text-white">Aceptar y abrir chat</button><button onClick={() => respondToMessageRequest(request.id, 'rejected')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white">Rechazar</button></div></div>)}
-          {messageRequests.filter((request) => request.sender_id === session.user.id).map((request) => <div key={request.id} className="border-t border-white/10 py-3 text-sm text-slate-400">Solicitud enviada a <button onClick={() => openProfile(request.receiver_id)} className="text-violet-300 hover:underline">{profileName(request.receiver_id)}</button><p className="mt-1">{request.content}</p></div>)}
-          {!messageRequests.some((request) => request.receiver_id === session.user.id || request.sender_id === session.user.id) && <p className="text-sm text-slate-400">No tienes solicitudes pendientes.</p>}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-          <h4 className="mb-3 font-semibold text-white">Nuevo chat</h4>
-          <select value={selectedFriend} onChange={(event) => setSelectedFriend(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white focus:border-violet-500 focus:outline-none"><option value="">Selecciona una persona</option>{profiles.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>
-        </div>
+        {activeChats.length > 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+            <h4 className="mb-3 font-semibold text-white">Conversaciones</h4>
+            <div className="grid gap-2 md:grid-cols-2">
+              {activeChats.map((userId) => { 
+                const history = getChatHistory(userId);
+                const last = history[history.length - 1];
+                const unread = history.filter((message) => message.receiver_id === session.user.id && !message.is_read && !message.status).length;
+                return (
+                  <button key={userId} onClick={() => openConversation(userId)} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-left hover:border-violet-400 hover:bg-violet-500/15">
+                    <div className="flex items-center justify-between"><span className="font-medium text-white">{profileName(userId)}</span>{unread > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{unread}</span>}</div>
+                    <p className="mt-1 truncate text-sm text-slate-300">{last.content}</p>
+                    <span className="mt-1 block text-xs text-slate-500">{new Date(last.created_at).toLocaleString()}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-8 text-center text-slate-400">
+            Aún no tienes chats. ¡Visita un perfil para enviar un mensaje!
+          </div>
+        )}
       </div>
     )
   }
